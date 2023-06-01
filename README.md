@@ -11,5 +11,6 @@ lake exe lean2sexp 〈oleanDir〉 〈outDir〉
 ```
 
 The utility is fashioned after a similar Agda backend, implemented in the
-[`ast-dump` branch of this Agda fork](https://github.com/andrejbauer/agda/tree/ast-dump), see in particular
-[`src/full/Agda/Interaction/Highlighting/Sexp](https://github.com/andrejbauer/agda/tree/ast-dump/src/full/Agda/Interaction/Highlighting/Sexp).
+[`ast-dump` branch of this Agda fork](https://github.com/andrejbauer/agda/tree/ast-dump), see
+[`src/full/Agda/Interaction/Highlighting/Sexp`](https://github.com/andrejbauer/agda/tree/ast-dump/src/full/Agda/Interaction/Highlighting/Sexp)
+therein.
