@@ -21,5 +21,5 @@ unsafe def main (args : List String) : IO Unit := do
         IO.println s!"[{k}/{totalFiles}] {srcFile} -> {outFile}"
         let (data, region) ← Lean.readModuleData srcFile
         let moduleName := (stemFile.splitOn "/").foldl Lean.Name.str Lean.Name.anonymous
-        IO.FS.writeFile outFile $ toString $ Sexp.fromModuleData moduleName data
+        IO.FS.writeFile outFile $ toString $ (← Sexp.fromModuleData moduleName data)
         region.free
