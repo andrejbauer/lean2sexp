@@ -2,12 +2,11 @@ import Lean
 import Sexp
 
 def main (args : List String) : IO Unit := do
-  let srcDir := System.FilePath.mk (args.get! 0)
-  let outDir := System.FilePath.mk (args.get! 1)
+  let srcDir := System.FilePath.mk $ (args.get? 0).getD "build/lib"
+  let outDir := System.FilePath.mk $ (args.get? 1).getD "sexp"
   IO.println s!"Extracting s-expressions from {srcDir} to {outDir}"
   IO.FS.createDirAll outDir
   let files ← System.FilePath.walkDir srcDir
-  --  (fun fp => do { let b ← fp.isDir ; pure $ (b || fp.toString.endsWith ".olean") })
   for srcFile in files.filter (fun fp => fp.toString.endsWith ".olean") do
     if ! srcFile.toString.startsWith srcDir.toString then
       IO.println s!"skipping {srcFile} because, mysteriously, is not in {outDir}"
