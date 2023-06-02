@@ -6,9 +6,10 @@ unsafe def main (args : List String) : IO Unit := do
   let outDir := System.FilePath.mk $ (args.get? 1).getD "sexp"
   IO.println s!"Extracting s-expressions from {srcDir} to {outDir}"
   IO.FS.createDirAll outDir
-  let files ← System.FilePath.walkDir srcDir
-  let totalFiles := files.size
-  for (k, srcFile) in (files.toList.filter (fun fp => fp.toString.endsWith ".olean")).enum do
+  let allFiles ← System.FilePath.walkDir srcDir
+  let files := allFiles.toList.filter (fun fp => fp.toString.endsWith ".olean")
+  let totalFiles := files.length
+  for (k, srcFile) in files.enumFrom 1 do
     if ! srcFile.toString.startsWith srcDir.toString then
       IO.println s!"skipping {srcFile} because, mysteriously, is not in {outDir}"
     else
@@ -21,5 +22,5 @@ unsafe def main (args : List String) : IO Unit := do
         IO.println s!"[{k}/{totalFiles}] {srcFile} -> {outFile}"
         let (data, region) ← Lean.readModuleData srcFile
         let moduleName := (stemFile.splitOn "/").foldl Lean.Name.str Lean.Name.anonymous
-        IO.FS.writeFile outFile $ toString $ (← Sexp.fromModuleData moduleName data)
+        IO.FS.writeFile outFile $ toString $ Sexp.fromModuleData moduleName data
         region.free

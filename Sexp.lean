@@ -6,6 +6,7 @@ inductive Sexp : Type
 | integer : Int → Sexp
 | double : Float → Sexp
 | cons : List Sexp → Sexp
+deriving Inhabited
 
 partial def Sexp.toString : Sexp → String
   | .atom s => s
@@ -85,25 +86,43 @@ instance: Sexpable Lean.Literal where
     | .natVal val => constr "literal" [toSexp val]
     | .strVal val => constr "literal" [toSexp val]
 
-def Sexp.fromExpr : Lean.Expr → Sexp
+def size : Lean.Expr → Nat
+  | .bvar _ => 1
+  | .fvar _ => 1
+  | .mvar _ => 1
+  | .sort _ => 1
+  | .const _ _ => 1
+  | .app e1 e2 => 1 + size e1 + size e2
+  | .lam _ binderType body _ => 1 + size binderType + size body
+  | .forallE _ binderType body _ => 1 + size binderType + size body
+  | .letE _ type value body _ => 1 + size type + size value + size body
+  | .lit _ => 1
+  | .mdata _ expr => 1 + size expr
+  | .proj _ _ struct => 1 + size struct
+
+partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
+  match e with
   | .bvar k => constr "var" [toSexp k]
   | .fvar fv => toSexp fv.name
-  | .mvar mvarId => constr "meta" [toSexp mvarId.name.hash]
+  | .mvar mvarId => constr "meta" [toSexp mvarId.name]
   | .sort u => constr "sort" [toSexp u]
   | .const declName us => constr "const" $ toSexp declName :: us.map toSexp
-  | .app e1 e2 => constr "apply" [fromExpr e1, fromExpr e2]
-  | .lam _ binderType body _ =>
-    constr "lambda" [fromExpr binderType, fromExpr body]
-  | .forallE _ binderType body _ =>
-    constr "pi" [fromExpr binderType, fromExpr body]
+  | .app _ _ => constr "apply" $ (getSpine e).reverse.map fromExpr
+  | .lam _ binderType body _ => constr "lambda" [fromExpr binderType, fromExpr body]
+  | .forallE _ binderType body _ => constr "pi" [fromExpr binderType, fromExpr body]
   | .letE declName type value body _ =>
     constr "let" [toSexp declName, fromExpr type, fromExpr value, fromExpr body]
   | .lit l => toSexp l
   | .mdata _ expr => fromExpr expr
   | .proj typeName idx struct => constr "proj" [toSexp typeName, toSexp idx, fromExpr struct]
+  where getSpine (e : Lean.Expr) : List Lean.Expr :=
+    match e with
+    | .app e1 e2 => e2 :: getSpine e1
+    | e => [e]
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
+  -- toSexp := fun e => constr "size" [toSexp $ size e]
 
 instance: Sexpable Lean.QuotKind where
   toSexp := fun k =>
@@ -127,12 +146,11 @@ instance: Sexpable Lean.ConstantInfo where
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [toSexp val.type]
 
-def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : IO Sexp := do
-  let lst ← data.constants.toList.filterM keepEntry
-  pure $ constr "module" $ constr "module-name" [toSexp nm] :: lst.map toSexp
-  where keepEntry (info : Lean.ConstantInfo) : IO Bool := do
-    IO.println s!"processing {info.name}"
-    pure $ match info.name with
+def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
+  let lst := data.constants.toList.filter keepEntry
+  constr "module" $ constr "module-name" [toSexp nm] :: lst.map toSexp
+  where keepEntry (info : Lean.ConstantInfo) : Bool :=
+    match info.name with
     | .anonymous => true
-    | .str _ s => ! "_cstage".isPrefixOf s && ! "_spec".isPrefixOf s
+    | .str _ _ => ! info.name.isInternal
     | .num _ k => true
