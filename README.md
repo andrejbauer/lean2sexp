@@ -8,7 +8,7 @@ In order to use `lean2sexp` in a Lean project, add the following line to `lakefi
 
 ```
 require lean2sexp from git
-  "https://github.com/andrejbauer/lean2sexp.git"
+  "https://github.com/andrejbauer/lean2sexp.git" @ "main"
 ```
 
 ## Usage
