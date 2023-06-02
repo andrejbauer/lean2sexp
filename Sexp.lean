@@ -127,10 +127,12 @@ instance: Sexpable Lean.ConstantInfo where
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [toSexp val.type]
 
-def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
-  constr "module" $ constr "module-name" [toSexp nm] :: (data.constants.toList.filter keepEntry).map toSexp
-  where keepEntry (info : Lean.ConstantInfo) : Bool :=
-    match info.name with
+def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : IO Sexp := do
+  let lst ← data.constants.toList.filterM keepEntry
+  pure $ constr "module" $ constr "module-name" [toSexp nm] :: lst.map toSexp
+  where keepEntry (info : Lean.ConstantInfo) : IO Bool := do
+    IO.println s!"processing {info.name}"
+    pure $ match info.name with
     | .anonymous => true
     | .str _ s => ! "_cstage".isPrefixOf s && ! "_spec".isPrefixOf s
     | .num _ k => true
