@@ -100,6 +100,27 @@ def size : Lean.Expr → Nat
   | .mdata _ expr => 1 + size expr
   | .proj _ _ struct => 1 + size struct
 
+-- create a count of subexpressions to detect the ones that repeat several times
+def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
+  match seen.find? e with
+  | .some k =>
+    -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
+    seen.insert e (k + 1)
+  | .none =>
+    match e with
+    | .bvar _ => seen
+    | .fvar _ => seen
+    | .mvar _ => seen
+    | .sort _ => seen
+    | .const _ _ => seen
+    | .lit _ => seen
+    | .app e1 e2 => collect (collect seen e1) e2
+    | .lam _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
+    | .forallE _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
+    | .letE _ type value body _ => collect (collect (collect (seen.insert e 0) type) value) body
+    | .mdata _ expr => collect (seen.insert e 0) expr
+    | .proj _ _ struct => collect (seen.insert e 0) struct
+
 partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
   match e with
   | .bvar k => constr "var" [toSexp k]
