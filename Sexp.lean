@@ -86,20 +86,6 @@ instance: Sexpable Lean.Literal where
     | .natVal val => constr "literal" [toSexp val]
     | .strVal val => constr "literal" [toSexp val]
 
-def size : Lean.Expr → Nat
-  | .bvar _ => 1
-  | .fvar _ => 1
-  | .mvar _ => 1
-  | .sort _ => 1
-  | .const _ _ => 1
-  | .app e1 e2 => 1 + size e1 + size e2
-  | .lam _ binderType body _ => 1 + size binderType + size body
-  | .forallE _ binderType body _ => 1 + size binderType + size body
-  | .letE _ type value body _ => 1 + size type + size value + size body
-  | .lit _ => 1
-  | .mdata _ expr => 1 + size expr
-  | .proj _ _ struct => 1 + size struct
-
 -- subexpressions that repeat
 def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
   (collect .empty e).fold (fun s e k => if k < 2 then s else s.insert e) .empty
@@ -109,6 +95,7 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
       -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
       seen.insert e (k + 1)
     | .none =>
+      let seen := seen.insert e 1
       match e with
       | .bvar _ => seen
       | .fvar _ => seen
@@ -117,34 +104,13 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
       | .const _ _ => seen
       | .lit _ => seen
       | .app e1 e2 => collect (collect seen e1) e2
-      | .lam _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
-      | .forallE _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
-      | .letE _ type value body _ => collect (collect (collect (seen.insert e 0) type) value) body
-      | .mdata _ expr => collect (seen.insert e 0) expr
-      | .proj _ _ struct => collect (seen.insert e 0) struct
+      | .lam _ binderType body _ => collect (collect seen binderType) body
+      | .forallE _ binderType body _ => collect (collect seen binderType) body
+      | .letE _ type value body _ => collect (collect (collect seen type) value) body
+      | .mdata _ expr => collect seen expr
+      | .proj _ _ struct => collect seen struct
 
--- create a count of subexpressions to detect the ones that repeat several times
-def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
-  match seen.find? e with
-  | .some k =>
-    -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
-    seen.insert e (k + 1)
-  | .none =>
-    match e with
-    | .bvar _ => seen
-    | .fvar _ => seen
-    | .mvar _ => seen
-    | .sort _ => seen
-    | .const _ _ => seen
-    | .lit _ => seen
-    | .app e1 e2 => collect (collect (seen.insert e 0) e1) e2
-    | .lam _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
-    | .forallE _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
-    | .letE _ type value body _ => collect (collect (collect (seen.insert e 0) type) value) body
-    | .mdata _ expr => collect seen expr
-    | .proj _ _ struct => collect (seen.insert e 0) struct
-
--- Auxiliary function, the workhorse
+-- auxiliary function, the workhorse
 structure St where
   repeated : Lean.HashSet Lean.Expr -- the expressions that are repeated
   index : Lean.HashMap Lean.Expr Nat := {} -- the index by which we refer to an expression
