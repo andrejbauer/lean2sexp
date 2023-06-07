@@ -44,10 +44,10 @@ instance: Sexpable Float where
 def Sexp.fromName (n : Lean.Name) : Sexp :=
   match n with
   | .anonymous => constr "anonymous" []
-  | .str mdl nm =>
-    constr "name" $ (toSexp mdl.hash) :: (toSexp nm.hash) :: (toAtoms n).reverse
-  | .num mdl k =>
-    constr "name" $ (toSexp mdl.hash) :: (toSexp k) :: (toAtoms n).reverse
+  | .str _ _ =>
+    constr "name" (toAtoms n).reverse
+  | .num _ _ =>
+    constr "name" (toAtoms n).reverse
   where
     toAtoms (n : Lean.Name) : List Sexp :=
       match n with
