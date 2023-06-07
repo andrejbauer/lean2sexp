@@ -100,6 +100,29 @@ def size : Lean.Expr → Nat
   | .mdata _ expr => 1 + size expr
   | .proj _ _ struct => 1 + size struct
 
+-- subexpressions that repeat
+def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
+  (collect .empty e).fold (fun s e k => if k < 2 then s else s.insert e) .empty
+  where collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
+    match seen.find? e with
+    | .some k =>
+      -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
+      seen.insert e (k + 1)
+    | .none =>
+      match e with
+      | .bvar _ => seen
+      | .fvar _ => seen
+      | .mvar _ => seen
+      | .sort _ => seen
+      | .const _ _ => seen
+      | .lit _ => seen
+      | .app e1 e2 => collect (collect seen e1) e2
+      | .lam _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
+      | .forallE _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
+      | .letE _ type value body _ => collect (collect (collect (seen.insert e 0) type) value) body
+      | .mdata _ expr => collect (seen.insert e 0) expr
+      | .proj _ _ struct => collect (seen.insert e 0) struct
+
 -- create a count of subexpressions to detect the ones that repeat several times
 def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
   match seen.find? e with
@@ -121,25 +144,71 @@ def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap L
     | .mdata _ expr => collect (seen.insert e 0) expr
     | .proj _ _ struct => collect (seen.insert e 0) struct
 
+-- Auxiliary function, the workhorse
+structure St where
+  repeated : Lean.HashSet Lean.Expr -- the expressions that are repeated
+  index : Lean.HashMap Lean.Expr Nat := {} -- the index by which we refer to an expression
+  nodes : List Sexp := [] -- the nodes
+
+abbrev M := StateM St
+
+def M.run {α : Type} (r : Lean.HashSet Lean.Expr) (act : M α) : α :=
+  StateT.run' (s := { repeated := r}) act
+
+partial def M.convert (e : Lean.Expr) : M Sexp := do
+  let st ← get
+  match st.index.find? e with
+  | .some k => pure $ constr "ref" [toSexp k]
+  | .none =>
+    let s ←
+      match e with
+      | .bvar k => pure $ constr "var" [toSexp k]
+      | .fvar fv => pure $ toSexp fv.name
+      | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
+      | .sort u => pure $ constr "sort" [toSexp u]
+      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
+      | .app _ _ =>
+        let lst ← getSpine e
+        pure $ constr "apply" lst.reverse
+      | .lam _ binderType body _ =>
+        let s1 ← convert binderType
+        let s2 ← convert body
+        pure $ constr "lambda" [s1, s2]
+      | .forallE _ binderType body _ =>
+        let s1 ← convert binderType
+        let s2 ← convert body
+        pure $ constr "pi" [s1, s2]
+      | .letE declName type value body _ =>
+        let s1 ← convert type
+        let s2 ← convert value
+        let s3 ← convert body
+        pure $ constr "let" [toSexp declName, s1, s2, s3]
+      | .lit l => pure $ toSexp l
+      | .mdata _ expr => convert expr
+      | .proj typeName idx struct =>
+        let s ← convert struct
+        pure $ constr "proj" [toSexp typeName, toSexp idx, s]
+    if (← get).repeated.contains e then
+      let st ← get
+      let r := st.nodes.length
+      set ({st with index := st.index.insert e r, nodes := s :: st.nodes}) ;
+    pure $ s
+    where
+      getSpine (e : Lean.Expr) : M (List Sexp) := do
+        match e with
+        | .app e1 e2 =>
+          let ss1 ← getSpine e1
+          let s2 ← convert e2
+          pure $ s2 :: ss1
+        | e =>
+          let s ← convert e
+          pure [s]
+      
 partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
-  match e with
-  | .bvar k => constr "var" [toSexp k]
-  | .fvar fv => toSexp fv.name
-  | .mvar mvarId => constr "meta" [toSexp mvarId.name]
-  | .sort u => constr "sort" [toSexp u]
-  | .const declName us => constr "const" $ toSexp declName :: us.map toSexp
-  | .app _ _ => constr "apply" $ (getSpine e).reverse.map fromExpr
-  | .lam _ binderType body _ => constr "lambda" [fromExpr binderType, fromExpr body]
-  | .forallE _ binderType body _ => constr "pi" [fromExpr binderType, fromExpr body]
-  | .letE declName type value body _ =>
-    constr "let" [toSexp declName, fromExpr type, fromExpr value, fromExpr body]
-  | .lit l => toSexp l
-  | .mdata _ expr => fromExpr expr
-  | .proj typeName idx struct => constr "proj" [toSexp typeName, toSexp idx, fromExpr struct]
-  where getSpine (e : Lean.Expr) : List Lean.Expr :=
-    match e with
-    | .app e1 e2 => e2 :: getSpine e1
-    | e => [e]
+  M.run (repeated e) do
+    let s ← M.convert e
+    let st ← get
+    pure $ st.nodes.foldl (fun t n => constr "node" [n, t]) s
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
@@ -174,4 +243,4 @@ def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
     match info.name with
     | .anonymous => true
     | .str _ _ => ! info.name.isInternal
-    | .num _ k => true
+    | .num _ _ => true
