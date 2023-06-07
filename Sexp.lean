@@ -125,20 +125,36 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
 
 -- collect all the names references by an expression
 def collectRefs (e : Lean.Expr) : List Lean.Name :=
-  (collect {} e).toList
-  where collect (ns : Lean.HashSet Lean.Name) : Lean.Expr → Lean.HashSet Lean.Name
-    | .bvar _ => ns
-    | .fvar fv => ns.insert fv.name
-    | .mvar _ => ns
-    | .sort _ => ns
-    | .const _ _ => ns
-    | .lit _ => ns
-    | .app e1 e2 => collect (collect ns e1) e2
-    | .lam _ binderType body _ => collect (collect ns binderType) body
-    | .forallE _ binderType body _ => collect (collect ns binderType) body
-    | .letE _ type value body _ => collect (collect (collect ns type) value) body
-    | .mdata _ expr => collect ns expr
-    | .proj _ _ struct => collect ns struct
+  let (_, ns) := collect {} {} e
+  ns.toList
+  where collect (seen : Lean.HashSet Lean.Expr) (ns : Lean.HashSet Lean.Name) (e : Lean.Expr)
+    : Lean.HashSet Lean.Expr × Lean.HashSet Lean.Name :=
+    if seen.contains e then
+      (seen, ns)
+    else
+      let seen := seen.insert e
+      match e with
+      | .bvar _ => (seen, ns)
+      | .fvar fv => (seen, ns.insert fv.name)
+      | .mvar _ => (seen, ns)
+      | .sort _ => (seen, ns)
+      | .const _ _ => (seen, ns)
+      | .lit _ => (seen, ns)
+      | .app e1 e2 =>
+        let (seen, ns) := collect seen ns e1
+        collect seen ns e2
+      | .lam _ binderType body _ =>
+        let (seen, ns) := collect seen ns binderType
+        collect seen ns body
+      | .forallE _ binderType body _ =>
+        let (seen, ns) := collect seen ns binderType
+        collect seen ns body
+      | .letE _ type value body _ =>
+        let (seen, ns) := collect seen ns type
+        let (seen, ns) := collect seen ns value
+        collect seen ns body
+      | .mdata _ expr => collect seen ns expr
+      | .proj _ _ struct => collect seen ns struct
 
 -- create a count of subexpressions to detect the ones that repeat several times
 def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
