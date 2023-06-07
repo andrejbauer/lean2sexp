@@ -123,6 +123,23 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
       | .mdata _ expr => collect (seen.insert e 0) expr
       | .proj _ _ struct => collect (seen.insert e 0) struct
 
+-- collect all the names references by an expression
+def collectRefs (e : Lean.Expr) : List Lean.Name :=
+  (collect {} e).toList
+  where collect (ns : Lean.HashSet Lean.Name) : Lean.Expr → Lean.HashSet Lean.Name
+    | .bvar _ => ns
+    | .fvar fv => ns.insert fv.name
+    | .mvar _ => ns
+    | .sort _ => ns
+    | .const _ _ => ns
+    | .lit _ => ns
+    | .app e1 e2 => collect (collect ns e1) e2
+    | .lam _ binderType body _ => collect (collect ns binderType) body
+    | .forallE _ binderType body _ => collect (collect ns binderType) body
+    | .letE _ type value body _ => collect (collect (collect ns type) value) body
+    | .mdata _ expr => collect ns expr
+    | .proj _ _ struct => collect ns struct
+
 -- create a count of subexpressions to detect the ones that repeat several times
 def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap Lean.Expr Nat :=
   match seen.find? e with
@@ -205,10 +222,7 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
           pure [s]
       
 partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
-  M.run (repeated e) do
-    let s ← M.convert e
-    let st ← get
-    pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s 
+  constr "references" $ (collectRefs e).map toSexp
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
