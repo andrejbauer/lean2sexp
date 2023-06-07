@@ -137,11 +137,11 @@ def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap L
     | .sort _ => seen
     | .const _ _ => seen
     | .lit _ => seen
-    | .app e1 e2 => collect (collect seen e1) e2
+    | .app e1 e2 => collect (collect (seen.insert e 0) e1) e2
     | .lam _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
     | .forallE _ binderType body _ => collect (collect (seen.insert e 0) binderType) body
     | .letE _ type value body _ => collect (collect (collect (seen.insert e 0) type) value) body
-    | .mdata _ expr => collect (seen.insert e 0) expr
+    | .mdata _ expr => collect seen expr
     | .proj _ _ struct => collect (seen.insert e 0) struct
 
 -- Auxiliary function, the workhorse
