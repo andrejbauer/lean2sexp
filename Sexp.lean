@@ -208,7 +208,7 @@ partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
   M.run (repeated e) do
     let s ← M.convert e
     let st ← get
-    pure $ st.nodes.foldl (fun t n => constr "node" [n, t]) s
+    pure $ st.nodes.enum.foldl (fun t (k, n) => constr "node" [k, n, t]) s 
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
