@@ -95,7 +95,6 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
       -- seen before, no need to descend into subexpressions (this avoids exponential blowup)
       seen.insert e (k + 1)
     | .none =>
-      let seen := seen.insert e 1
       match e with
       | .bvar _ => seen
       | .fvar _ => seen
@@ -103,10 +102,18 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
       | .sort _ => seen
       | .const _ _ => seen
       | .lit _ => seen
-      | .app e1 e2 => collect (collect seen e1) e2
-      | .lam _ binderType body _ => collect (collect seen binderType) body
-      | .forallE _ binderType body _ => collect (collect seen binderType) body
-      | .letE _ type value body _ => collect (collect (collect seen type) value) body
+      | .app e1 e2 => 
+        let seen := seen.insert e 1
+        collect (collect seen e1) e2
+      | .lam _ binderType body _ =>
+        let seen := seen.insert e 1
+        collect (collect seen binderType) body
+      | .forallE _ binderType body _ =>
+        let seen := seen.insert e 1
+        collect (collect seen binderType) body
+      | .letE _ type value body _ =>
+        let seen := seen.insert e 1
+        collect (collect (collect seen type) value) body
       | .mdata _ expr => collect seen expr
       | .proj _ _ struct => collect seen struct
 
