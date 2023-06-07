@@ -126,9 +126,9 @@ def repeated (e : Lean.Expr) : Lean.HashSet Lean.Expr :=
 -- collect all the names references by an expression
 def collectRefs (e : Lean.Expr) : List Lean.Name :=
   let (_, ns) := collect {} {} e
-  ns.toList
-  where collect (seen : Lean.HashSet Lean.Expr) (ns : Lean.HashSet Lean.Name) (e : Lean.Expr)
-    : Lean.HashSet Lean.Expr × Lean.HashSet Lean.Name :=
+  ns
+  where collect (seen : Lean.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
+    : Lean.HashSet Lean.Expr × List Lean.Name :=
     if seen.contains e then
       (seen, ns)
     else
@@ -138,7 +138,7 @@ def collectRefs (e : Lean.Expr) : List Lean.Name :=
       | .fvar _ => (seen, ns) -- should never get here (exposed bound variable)
       | .mvar _ => (seen, ns)
       | .sort _ => (seen, ns)
-      | .const declName _ => (seen, ns.insert declName)
+      | .const declName _ => (seen, declName :: ns)
       | .lit _ => (seen, ns)
       | .app e1 e2 =>
         let (seen, ns) := collect seen ns e1
