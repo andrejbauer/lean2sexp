@@ -69,8 +69,8 @@ def Sexp.fromLevel (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
     | .param nm => toSexp nm
     | .mvar mv => toSexp mv.name
 
-instance: Sexpable Lean.Level where
-  toSexp := Sexp.fromLevel
+-- instance: Sexpable Lean.Level where
+--   toSexp := Sexp.fromLevel
 
 instance: Sexpable Lean.BinderInfo where
   toSexp := fun info =>
@@ -165,8 +165,8 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
       | .bvar k => pure $ constr "var" [toSexp k]
       | .fvar fv => pure $ toSexp fv.name
       | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
-      | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
+      | .sort _ => pure $ constr "sort" [] -- used to be [toSexp u]
+      | .const declName _ => pure $ constr "const" [toSexp declName] -- used to be: $ toSexp declName :: us.map toSexp
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
