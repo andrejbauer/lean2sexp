@@ -135,7 +135,7 @@ def collectRefs (e : Lean.Expr) : List Lean.Name :=
       let seen := seen.insert e
       match e with
       | .bvar _ => (seen, ns)
-      | .fvar fv => (seen, ns.insert fv.name)
+      | .fvar _ => (seen, ns) -- should never get here (exposed bound variable)
       | .mvar _ => (seen, ns)
       | .sort _ => (seen, ns)
       | .const declName _ => (seen, ns.insert declName)
