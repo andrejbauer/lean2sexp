@@ -148,7 +148,7 @@ def collect (seen : Lean.HashMap Lean.Expr Nat) (e : Lean.Expr) : Lean.HashMap L
 structure St where
   repeated : Lean.HashSet Lean.Expr -- the expressions that are repeated
   index : Lean.HashMap Lean.Expr Nat := {} -- the index by which we refer to an expression
-  nodes : List Sexp := [] -- the nodes
+  nodes : List (Nat × Sexp) := [] -- the nodes
 
 abbrev M := StateM St
 
@@ -191,7 +191,7 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
     if (← get).repeated.contains e then
       let st ← get
       let r := st.nodes.length
-      set ({st with index := st.index.insert e r, nodes := s :: st.nodes}) ;
+      set ({st with index := st.index.insert e r, nodes := (r, s) :: st.nodes}) ;
     pure $ s
     where
       getSpine (e : Lean.Expr) : M (List Sexp) := do
@@ -208,7 +208,7 @@ partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
   M.run (repeated e) do
     let s ← M.convert e
     let st ← get
-    pure $ st.nodes.enum.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s 
+    pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s 
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
