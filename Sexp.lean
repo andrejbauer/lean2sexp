@@ -123,10 +123,10 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
     let s ←
       match e with
       | .bvar k => pure $ constr "var" [toSexp k]
-      | .fvar fv => pure $ toSexp fv.name
+      | .fvar fv => pure $ constr "fvar" [toSexp fv.name]
       | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
       | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
+      | .const declName us => pure $ constr "name" $ toSexp declName :: us.map toSexp
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
