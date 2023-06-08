@@ -41,20 +41,7 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.fromName (n : Lean.Name) : Sexp :=
-  match n with
-  | .anonymous => constr "anonymous" []
-  | .str _ _ =>
-    constr "name" (toAtoms n).reverse
-  | .num _ _ =>
-    constr "name" (toAtoms n).reverse
-  where
-    toAtoms (n : Lean.Name) : List Sexp :=
-      match n with
-      | .anonymous => [.atom "_"]
-      | .str .anonymous s => [.atom s]
-      | .str mdl s => .atom s :: toAtoms mdl
-      | .num mdl k => .atom s!"num{k}" :: toAtoms mdl
+def Sexp.fromName (n : Lean.Name) : Sexp := Sexp.string n.toString
 
 instance: Sexpable Lean.Name where
   toSexp := Sexp.fromName
@@ -69,8 +56,8 @@ def Sexp.fromLevel (lvl : Lean.Level) : Sexp := constr "level" [fromLvl lvl]
     | .param nm => toSexp nm
     | .mvar mv => toSexp mv.name
 
--- instance: Sexpable Lean.Level where
---   toSexp := Sexp.fromLevel
+instance: Sexpable Lean.Level where
+  toSexp := Sexp.fromLevel
 
 instance: Sexpable Lean.BinderInfo where
   toSexp := fun info =>
@@ -138,8 +125,8 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
       | .bvar k => pure $ constr "var" [toSexp k]
       | .fvar fv => pure $ toSexp fv.name
       | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
-      | .sort _ => pure $ constr "sort" [] -- used to be [toSexp u]
-      | .const declName _ => pure $ constr "const" [toSexp declName] -- used to be: $ toSexp declName :: us.map toSexp
+      | .sort u => pure $ constr "sort" [toSexp u]
+      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
@@ -185,7 +172,6 @@ partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
 
 instance: Sexpable Lean.Expr where
   toSexp := Sexp.fromExpr
-  -- toSexp := fun e => constr "size" [toSexp $ size e]
 
 instance: Sexpable Lean.QuotKind where
   toSexp := fun k =>
@@ -197,12 +183,12 @@ instance: Sexpable Lean.QuotKind where
 
 instance: Sexpable Lean.ConstantInfo where
   toSexp := fun info =>
-    constr "definition" [toSexp info.name, toSexp info.type, theDef info]
+    constr "entry" [toSexp info.name, toSexp info.type, theDef info]
     where theDef : Lean.ConstantInfo → Sexp := fun info =>
       match info with
       | .axiomInfo _ => constr "axiom" []
       | .defnInfo val => constr "function" [toSexp val.value]
-      | .thmInfo val => constr "function" [toSexp val.value]
+      | .thmInfo val => constr "theorem" [toSexp val.value]
       | .opaqueInfo val => constr "abstract" [toSexp val.value]
       | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.toConstantVal.name]
       | .inductInfo val => constr "data" $ toSexp val.type :: val.ctors.map toSexp
