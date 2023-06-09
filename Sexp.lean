@@ -15,6 +15,27 @@ partial def Sexp.toString : Sexp → String
   | .double x => ToString.toString x
   | .cons lst => "(" ++ (" ".intercalate $ lst.map toString) ++ ")"
 
+partial def Sexp.write (fh : IO.FS.Handle) : Sexp → IO Unit
+  | .atom s => fh.putStr s
+  | .string s => fh.putStr s.quote
+  | .integer k => fh.putStr $ ToString.toString k
+  | .double x => fh.putStr $ ToString.toString x
+  | .cons lst =>
+      do
+        fh.putStr "("
+        writeList lst
+        fh.putStr ")"
+  where
+    writeList (lst : List Sexp) : IO Unit :=
+    match lst with
+    | [] => return
+    | [s] => write fh s
+    | s :: ss =>
+      do
+        write fh s
+        fh.putStr " "
+        writeList ss
+
 instance: ToString Sexp where
   toString := Sexp.toString
 
