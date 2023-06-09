@@ -247,7 +247,7 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
       | .thmInfo val => constr "theorem" [exprCollect val.value]
       | .opaqueInfo val => constr "abstract" [exprCollect val.value]
       | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.name, exprCollect val.type]
-      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map (fun ctor => constr "name" [toSexp ctor])
+      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map toSexp
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
