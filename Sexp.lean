@@ -191,8 +191,44 @@ partial def Sexp.fromExpr (e : Lean.Expr) : Sexp :=
     let st ← get
     pure $ st.nodes.foldl (fun t (k, n) => constr "node" [toSexp k, n, t]) s 
 
-instance: Sexpable Lean.Expr where
-  toSexp := Sexp.fromExpr
+-- collect all the names references by an expression
+def collectRefs (e : Lean.Expr) : List Lean.Name :=
+  let (_, ns) := collect {} {} e
+  ns
+  where collect (seen : Lean.HashSet Lean.Expr) (ns : List Lean.Name) (e : Lean.Expr)
+    : Lean.HashSet Lean.Expr × List Lean.Name :=
+    if seen.contains e then
+      (seen, ns)
+    else
+      let seen := seen.insert e
+      match e with
+      | .bvar _ => (seen, ns)
+      | .fvar _ => (seen, ns) -- should never get here (exposed bound variable)
+      | .mvar _ => (seen, ns)
+      | .sort _ => (seen, ns)
+      | .const declName _ => (seen, declName :: ns)
+      | .lit _ => (seen, ns)
+      | .app e1 e2 =>
+        let (seen, ns) := collect seen ns e1
+        collect seen ns e2
+      | .lam _ binderType body _ =>
+        let (seen, ns) := collect seen ns binderType
+        collect seen ns body
+      | .forallE _ binderType body _ =>
+        let (seen, ns) := collect seen ns binderType
+        collect seen ns body
+      | .letE _ type value body _ =>
+        let (seen, ns) := collect seen ns type
+        let (seen, ns) := collect seen ns value
+        collect seen ns body
+      | .mdata _ expr => collect seen ns expr
+      | .proj _ _ struct => collect seen ns struct
+
+def Sexp.fromExprRefs (e : Lean.Expr) : Sexp :=
+  constr "references" $ (collectRefs e).map toSexp
+
+-- instance: Sexpable Lean.Expr where
+--   toSexp := Sexp.fromExpr
 
 instance: Sexpable Lean.QuotKind where
   toSexp := fun k =>
@@ -202,23 +238,23 @@ instance: Sexpable Lean.QuotKind where
   | .lift => constr "lift" []
   | .ind  => constr "ind" []
 
-instance: Sexpable Lean.ConstantInfo where
-  toSexp := fun info =>
-    constr "entry" [toSexp info.name, toSexp info.type, theDef info]
+def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantInfo) : Sexp :=
+    constr "entry" [toSexp info.name, exprCollect info.type, theDef info]
     where theDef : Lean.ConstantInfo → Sexp := fun info =>
       match info with
       | .axiomInfo _ => constr "axiom" []
-      | .defnInfo val => constr "function" [toSexp val.value]
-      | .thmInfo val => constr "theorem" [toSexp val.value]
-      | .opaqueInfo val => constr "abstract" [toSexp val.value]
-      | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.toConstantVal.name]
-      | .inductInfo val => constr "data" $ toSexp val.type :: val.ctors.map toSexp
+      | .defnInfo val => constr "function" [exprCollect val.value]
+      | .thmInfo val => constr "theorem" [exprCollect val.value]
+      | .opaqueInfo val => constr "abstract" [exprCollect val.value]
+      | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.name, exprCollect val.type]
+      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map toSexp
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
-      | .recInfo val => constr "recursor" [toSexp val.type]
+      | .recInfo val => constr "recursor" [exprCollect val.type]
 
-def Sexp.fromModuleData (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
+def Sexp.fromModuleData (refsOnly : Bool) (nm : Lean.Name) (data : Lean.ModuleData) : Sexp :=
   let lst := data.constants.toList.filter keepEntry
-  constr "module" $ constr "module-name" [toSexp nm] :: lst.map toSexp
+  let moduleBody := lst.map (constantInfo $ if refsOnly then fromExprRefs else fromExpr)
+  constr "module" $ constr "module-name" [toSexp nm] :: moduleBody
   where keepEntry (info : Lean.ConstantInfo) : Bool :=
     match info.name with
     | .anonymous => true

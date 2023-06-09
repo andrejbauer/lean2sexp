@@ -1,11 +1,10 @@
 import Lean
 import Sexp
-import Tree.Bird
 
 structure Config : Type where
   srcDir : System.FilePath := "build/lib" -- the directory where .olean files are found
   outDir : System.FilePath := "sexp" -- the output directory (created if needed)
-  referencesOnly : Bool := False -- only output references names
+  refsOnly : Bool := False -- only output references names
   force : Bool := False -- process file even if .sexp is newer than .olean
 
 def usage : String :=
@@ -13,7 +12,7 @@ def usage : String :=
 
   --srcdir ⟨DIR⟩    set the source directory where .olean files are (default: build/lib)
   --outdir ⟨DIR⟩    set the output directory (default: sexp)
-  --referencesOnly  output only referenced names instead of syntax trees, much faster (default: false)
+  --refsOnly        output only referenced names instead of syntax trees, much faster (default: false)
   --force           process a file even if .sexp is newer than .olean (default: false)
 "
 -- Poor man's parsing of command-line arguments
@@ -22,7 +21,7 @@ def parseArgs (conf : Config) (args : List String) : Option Config :=
   | [] => .some conf
   | "--srcdir" :: dir :: args => parseArgs {conf with srcDir := dir} args
   | "--outdir" :: dir :: args => parseArgs {conf with srcDir := dir} args
-  | "--referencesOnly" :: args => parseArgs {conf with referencesOnly := True} args
+  | "--refsOnly" :: args => parseArgs {conf with refsOnly := True} args
   | "--force" :: args => parseArgs {conf with force := True} args
   | _ => .none
 
@@ -31,7 +30,8 @@ unsafe def main (args : List String) : IO Unit := do
   | .none =>
     IO.println s!"Error: could not parse command-line arguments\n\n{usage}"
   | .some conf =>
-    IO.println s!"Extracting s-expressions from {conf.srcDir} to {conf.outDir}"
+    let what := if conf.refsOnly then "references" else "syntax trees"
+    IO.println s!"Extracting {what} from {conf.srcDir} to {conf.outDir}"
     IO.FS.createDirAll conf.outDir
     let allFiles ← System.FilePath.walkDir conf.srcDir
     let files := allFiles.toList.filter (fun fp => fp.toString.endsWith ".olean")
@@ -54,5 +54,5 @@ unsafe def main (args : List String) : IO Unit := do
           IO.println s!"[{k}/{totalFiles}] PROCESSING {srcFile} → {outFile}"
           let (data, region) ← Lean.readModuleData srcFile
           let moduleName := baseName.foldl Lean.Name.str Lean.Name.anonymous
-          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData moduleName data)
+          IO.FS.withFile outFile .write (fun fh => Sexp.write fh $ Sexp.fromModuleData conf.refsOnly moduleName data)
           region.free
