@@ -62,7 +62,7 @@ instance: Sexpable UInt64 where
 instance: Sexpable Float where
   toSexp := .double
 
-def Sexp.fromName (n : Lean.Name) : Sexp := Sexp.string n.toString
+def Sexp.fromName (n : Lean.Name) : Sexp := constr "name" [toSexp n.toString]
 
 instance: Sexpable Lean.Name where
   toSexp := Sexp.fromName
@@ -147,7 +147,7 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
       | .fvar fv => pure $ constr "fvar" [toSexp fv.name]
       | .mvar mvarId => pure $ constr "meta" [toSexp mvarId.name]
       | .sort u => pure $ constr "sort" [toSexp u]
-      | .const declName us => pure $ constr "name" $ toSexp declName :: us.map toSexp
+      | .const declName us => pure $ constr "const" $ toSexp declName :: us.map toSexp
       | .app _ _ =>
         let lst ← getSpine e
         pure $ constr "apply" lst.reverse
@@ -159,11 +159,11 @@ partial def M.convert (e : Lean.Expr) : M Sexp := do
         let s1 ← convert binderType
         let s2 ← convert body
         pure $ constr "pi" [s1, s2]
-      | .letE declName type value body _ =>
+      | .letE _ type value body _ =>
         let s1 ← convert type
         let s2 ← convert value
         let s3 ← convert body
-        pure $ constr "let" [toSexp declName, s1, s2, s3]
+        pure $ constr "let" [s1, s2, s3]
       | .lit l => pure $ toSexp l
       | .mdata _ expr => convert expr
       | .proj typeName idx struct =>
@@ -247,7 +247,7 @@ def Sexp.constantInfo (exprCollect : Lean.Expr → Sexp) (info : Lean.ConstantIn
       | .thmInfo val => constr "theorem" [exprCollect val.value]
       | .opaqueInfo val => constr "abstract" [exprCollect val.value]
       | .quotInfo val => constr "quot-info" [toSexp val.kind, toSexp val.name, exprCollect val.type]
-      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map toSexp
+      | .inductInfo val => constr "data" $ exprCollect val.type :: val.ctors.map (fun ctor => constr "name" [toSexp ctor])
       | .ctorInfo val => constr "constructor" [toSexp val.induct]
       | .recInfo val => constr "recursor" [exprCollect val.type]
 
