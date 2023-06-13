@@ -20,7 +20,7 @@ def parseArgs (conf : Config) (args : List String) : Option Config :=
   match args with
   | [] => .some conf
   | "--srcdir" :: dir :: args => parseArgs {conf with srcDir := dir} args
-  | "--outdir" :: dir :: args => parseArgs {conf with srcDir := dir} args
+  | "--outdir" :: dir :: args => parseArgs {conf with outDir := dir} args
   | "--refsOnly" :: args => parseArgs {conf with refsOnly := True} args
   | "--force" :: args => parseArgs {conf with force := True} args
   | _ => .none
@@ -43,7 +43,7 @@ unsafe def main (args : List String) : IO Unit := do
         let baseName := (srcFile.withExtension "").components.drop (conf.srcDir.components.length)
         let outFile := System.FilePath.join conf.outDir $ (".".intercalate (baseName ++ ["sexp"]))
         let srcMetadata ← srcFile.metadata
-        let outMetadata ← outFile.metadata.toBaseIO 
+        let outMetadata ← outFile.metadata.toBaseIO
         let srcNewer : Bool :=
           match outMetadata with
           | .error _ => true
